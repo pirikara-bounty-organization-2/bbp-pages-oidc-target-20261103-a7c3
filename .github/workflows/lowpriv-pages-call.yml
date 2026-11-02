@@ -1,0 +1,42 @@
+name: BBP low-privilege Pages deployment caller
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+
+jobs:
+  call-pages-api:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Submit controlled target artifact with foreign OIDC token
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FOREIGN_OIDC_TOKEN: ${{ secrets.FOREIGN_OIDC_TOKEN }}
+        run: |
+          jq -n \
+            --argjson artifact_id 13159723104 \
+            --arg environment github-pages \
+            --arg pages_build_version 725a653214f37732abb62fd596f90a2435e44184 \
+            --arg oidc_token "$FOREIGN_OIDC_TOKEN" \
+            '{artifact_id: $artifact_id, environment: $environment, pages_build_version: $pages_build_version, oidc_token: $oidc_token}' \
+            > request.json
+
+          status="$(curl --silent --show-error \
+            --request POST \
+            --header "Accept: application/vnd.github+json" \
+            --header "Authorization: Bearer $GH_TOKEN" \
+            --header "X-GitHub-Api-Version: 2022-11-28" \
+            --dump-header response.headers \
+            --output response.json \
+            --write-out '%{http_code}' \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/pages/deployments" \
+            --data @request.json)"
+
+          rm request.json
+          printf 'HTTP status: %s\n' "$status"
+          grep -i '^x-github-request-id:' response.headers || true
+          jq '{id, page_url, status_url, message}' response.json
+          test "$status" = "200"
