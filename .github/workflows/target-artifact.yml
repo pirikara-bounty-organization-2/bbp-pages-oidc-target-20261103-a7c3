@@ -1,0 +1,22 @@
+name: BBP target Pages artifact
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create harmless marker site
+        shell: bash
+        run: |
+          mkdir -p _site
+          printf '%s\n' 'BBP Pages OIDC cross-repository validation marker 2026-11-03' > _site/index.html
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
