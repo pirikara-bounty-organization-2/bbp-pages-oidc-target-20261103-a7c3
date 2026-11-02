@@ -1,0 +1,18 @@
+name: BBP protected Pages environment control
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+  pages: write
+
+jobs:
+  protected-control:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+    steps:
+      - name: Marker that must not run without review
+        run: echo 'Protected environment review completed'
