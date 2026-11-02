@@ -1,0 +1,31 @@
+name: BBP official Pages action without environment
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+  pages: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create harmless marker site
+        run: |
+          mkdir -p _site
+          printf '%s\n' 'BBP_PAGES_ENVIRONMENT_BYPASS_OFFICIAL_ACTION_2026_11_03' > _site/index.html
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy-without-environment:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy without declaring the protected github-pages environment
+        id: deployment
+        uses: actions/deploy-pages@v4
